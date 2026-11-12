@@ -105,11 +105,11 @@ La commande `kubectl get componentstatuses` est obsolète dans les versions réc
 
 ### Questions
 
-1. Quel est le rôle du control plane ?
-2. Quelle différence existe-t-il entre un nœud Kubernetes et un Pod ?
-3. Quel contrôleur maintient le nombre de réplicas demandé par un Deployment ?
-4. Quelle différence existe-t-il entre un conteneur et un Pod ?
-5. Quelles limites présente un cluster local à un seul nœud par rapport à un cluster de production ?
+1. Quel est le rôle du control plane ? Le control plane est le cerveau du cluster Kubernetes, il va gérer et superviser l'ensemble du cluster.
+2. Quelle différence existe-t-il entre un nœud Kubernetes et un Pod ? Un noeud est une machine physique ou virtuelle qui exécute les applications du cluster, tandis que le pod est le plus petite unité deployable de Kubernetes, il va contenir un ou plusieurs conteneurs.
+3. Quel contrôleur maintient le nombre de réplicas demandé par un Deployment ? C'est ReplicaSet
+4. Quelle différence existe-t-il entre un conteneur et un Pod ? Un conteneur est un environnement où on exécute une application, un pod lui peut regrouper plusieurs conteneurs qui partagent la même adresse IP
+5. Quelles limites présente un cluster local à un seul nœud par rapport à un cluster de production ? Ressources limitées, ne reproduit pas les vraies conditions d'un environnement distribué, ne possède pas les mécanismes de sécurité d'un cluster de production, ne permet pas de tester la tolérance à la panne d'un noeud.
 
 ### Livrable
 
@@ -156,7 +156,8 @@ kubectl apply -f k8s/01-namespace.yaml
 kubectl get namespaces
 ```
 
-**Question 2.** Quel intérêt présente un namespace dans un environnement partagé entre plusieurs équipes ?
+**Question 2.** Quel intérêt présente un namespace dans un environnement partagé entre plusieurs équipes ? 
+Un namespace permet de séparer les ressources Kubernetes. C'est à dire que chaque équipe peut disposer de ses propres pods et services  sans mélanger ses ressources avec celles des autres équipes. Il facilite également la gestion des droits d'accès, des quotas et des limites de ressources.
 
 ### 4.3 Créer une page web avec une ConfigMap
 
@@ -192,6 +193,7 @@ kubectl describe configmap page-web -n tp-k8s
 ```
 
 **Question 3.** Pourquoi utiliser une ConfigMap plutôt que d’intégrer directement la page dans le manifeste du Deployment ?
+Une ConfigMap permet de séparer la configuration du code de l'application et du coup on peut modifier la page HTML sans devoir modifier directement le manifeste du Deployment. Ca va aussi faciliter la maintenance et la réutilisation des configs.
 
 ### 4.4 Créer le Deployment
 
@@ -315,11 +317,11 @@ curl -i http://localhost:8080
 
 ### Questions
 
-1. Quel est le rôle du Deployment par rapport au ReplicaSet ?
-2. Pourquoi ne pas accéder directement aux adresses IP des Pods ?
-3. Quelle différence existe-t-il entre `ClusterIP`, `NodePort` et `LoadBalancer` ?
-4. Quelle différence existe-t-il entre une readiness probe et une liveness probe ?
-5. Que peut-il se passer si une limite mémoire est trop basse ?
+1. Quel est le rôle du Deployment par rapport au ReplicaSet ? Le Deployment crée et supervise un ReplicaSet, qui est chargé de maintenir le nombre de Pods demandé.
+2. Pourquoi ne pas accéder directement aux adresses IP des Pods ? Les Pods peuvent être supprimés et recréés automatiquement donc leur adresse IP peut changer.
+3. Quelle différence existe-t-il entre `ClusterIP`, `NodePort` et `LoadBalancer` ? ClusterIP expose le Service uniquement à l'intérieur du cluster, NodePort quant à lui expose le Service sur un port de chaque nœud du cluster et LoadBalancer expose le Service à l'extérieur du cluster grâce à un répartisseur de charge.
+4. Quelle différence existe-t-il entre une readiness probe et une liveness probe ? Readiness probe vérifie si le conteneur est prêt à recevoir du trafic et Liveness probe vérifie si le conteneur fonctionne correctement.
+5. Que peut-il se passer si une limite mémoire est trop basse ? Le conteneur peut dépasser sa limite mémoire et être arrêté par Kubernetes avec le statut OOMKilled, ce qui peut provoquer des redémarrages répétés et rendre l'application indisponible.
 
 ---
 
@@ -361,11 +363,11 @@ Si le Pod supprimé n’existe plus, sélectionnez un Pod encore présent.
 
 ### Questions d’analyse
 
-1. Pourquoi le Pod supprimé est-il remplacé ?
-2. Quelle différence existe-t-il entre la suppression d’un Pod et l’arrêt d’un processus dans un conteneur ?
-3. Pourquoi un redémarrage de conteneur ne signifie-t-il pas nécessairement que le cluster entier est en panne ?
-4. Que se passerait-il si le nœud unique de Minikube devenait indisponible ?
-5. Pourquoi un cluster local à un seul nœud ne permet-il pas de démontrer la tolérance à la panne d’un nœud physique ?
+1. Pourquoi le Pod supprimé est-il remplacé ? Le Deployment doit maintenir 2 replicas donc quand ReplicaSet constate qu'il n'en reste qu'un il en crée un nouveau.
+2. Quelle différence existe-t-il entre la suppression d’un Pod et l’arrêt d’un processus dans un conteneur ? La suppression d'un Pod entraîne sa disparition du cluster alors que l'arrêt d'un processus dans un conteneur peut entraîner le redémarrage du conteneur dans le même Pod.
+3. Pourquoi un redémarrage de conteneur ne signifie-t-il pas nécessairement que le cluster entier est en panne ? Parce que Kubernetes isole les applications dans différents Pods et conteneurs.
+4. Que se passerait-il si le nœud unique de Minikube devenait indisponible ? Tous les Pods exécutés sur ce noeud deviendraient indisponibles.
+5. Pourquoi un cluster local à un seul nœud ne permet-il pas de démontrer la tolérance à la panne d’un nœud physique ? Parce qu'il ne possède aucun autre noeud capable de prendre le relais, donc une panne du seul nœud entraîne l'indisponibilité de toutes les applications du cluster.
 
 ---
 
@@ -401,9 +403,9 @@ Le Service peut distribuer les connexions vers les Pods prêts. La page étant i
 
 ### Questions
 
-1. Quelle différence existe-t-il entre la mise à l’échelle manuelle et l’autoscaling ?
-2. Quel est le rôle d’un Horizontal Pod Autoscaler (HPA) ?
-3. Pourquoi un HPA basé sur le CPU nécessite-t-il des métriques et des ressources correctement configurées ?
+1. Quelle différence existe-t-il entre la mise à l’échelle manuelle et l’autoscaling ? La mise à l'échelle manuelle consiste à modifier soi-même le nombre de réplicas à l'aide d'une commande, alors que l'autoscaling ajuste automatiquement le nombre de réplicas en fonction de critères comme l'utilisation du processeur ou de la mémoire.
+2. Quel est le rôle d’un Horizontal Pod Autoscaler (HPA) ? Le HPA ajuste automatiquement le nombre de Pods d'un Deployment ou d'un autre contrôleur compatible en fonction de métriques définies.
+3. Pourquoi un HPA basé sur le CPU nécessite-t-il des métriques et des ressources correctement configurées ? 
 4. Pourquoi quatre réplicas sur un seul nœud ne garantissent-ils pas la disponibilité en cas de panne de ce nœud ?
 
 ---
