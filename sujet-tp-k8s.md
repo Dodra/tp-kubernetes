@@ -113,7 +113,37 @@ La commande `kubectl get componentstatuses` est obsolète dans les versions réc
 
 ### Livrable
 
-Réalisez un schéma simple du cluster local et expliquez le rôle des composants que vous avez identifiés.
+Schéma simplifié du cluster local :
+
+```text
+                 CONTROL PLANE
+        +-----------------------------+
+        | API Server                  |
+        | Scheduler                   |
+        | Controller Manager          |
+        | etcd                        |
+        +--------------+--------------+
+                       |
+                       v
+              NŒUD MINIKUBE (Docker)
+        +-----------------------------+
+        | Kubelet                     |
+        |                             |
+        |  +---------+  +---------+   |
+        |  | Pod 1   |  | Pod 2   |   |
+        |  | Nginx   |  | Nginx   |   |
+        |  +----+----+  +----+----+   |
+        |       +----+------+         |
+        |          Service            |
+        +-------------+---------------+
+                      |
+                port-forward
+                      |
+                      v
+              Navigateur localhost:8080
+```
+
+Le Control Plane gère le cluster. L'API Server reçoit les commandes, le Scheduler choisit où placer les Pods, le Controller Manager veille au respect de l'état souhaité et etcd stocke les informations du cluster. Le nœud Minikube héberge les Pods et le Kubelet surveille leur fonctionnement. Le Service permet d'accéder aux Pods avec une adresse stable et le port-forward permet d'ouvrir l'application depuis le navigateur.
 
 ---
 
@@ -405,8 +435,8 @@ Le Service peut distribuer les connexions vers les Pods prêts. La page étant i
 
 1. Quelle différence existe-t-il entre la mise à l’échelle manuelle et l’autoscaling ? La mise à l'échelle manuelle consiste à modifier soi-même le nombre de réplicas à l'aide d'une commande, alors que l'autoscaling ajuste automatiquement le nombre de réplicas en fonction de critères comme l'utilisation du processeur ou de la mémoire.
 2. Quel est le rôle d’un Horizontal Pod Autoscaler (HPA) ? Le HPA ajuste automatiquement le nombre de Pods d'un Deployment ou d'un autre contrôleur compatible en fonction de métriques définies.
-3. Pourquoi un HPA basé sur le CPU nécessite-t-il des métriques et des ressources correctement configurées ? 
-4. Pourquoi quatre réplicas sur un seul nœud ne garantissent-ils pas la disponibilité en cas de panne de ce nœud ?
+3. Pourquoi un HPA basé sur le CPU nécessite-t-il des métriques et des ressources correctement configurées ? Le HPA a besoin de connaître l'utilisation du processeur pour savoir s'il doit augmenter ou réduire le nombre de Pods. Il faut donc que les métriques soient disponibles et que les ressources CPU soient correctement définies.
+4. Pourquoi quatre réplicas sur un seul nœud ne garantissent-ils pas la disponibilité en cas de panne de ce nœud ? Parce que les quatre Pods sont hébergés sur le même nœud. Si celui-ci tombe en panne, les quatre deviennent indisponibles en même temps.
 
 ---
 
@@ -468,10 +498,10 @@ kubectl rollout status deployment/web -n tp-k8s
 
 ### Questions
 
-1. Que signifie la stratégie `RollingUpdate` ?
-2. Pourquoi une mise à jour progressive ne garantit-elle pas, à elle seule, une disponibilité parfaite ?
-3. Dans quelles conditions `rollout undo` fonctionne-t-il ?
-4. Pourquoi faut-il versionner les configurations et planifier les migrations de base de données séparément ?
+1. Que signifie la stratégie `RollingUpdate` ? C'est une stratégie qui permet de remplacer progressivement les anciens Pods par les nouveaux sans arrêter toute l'application en même temps.
+2. Pourquoi une mise à jour progressive ne garantit-elle pas, à elle seule, une disponibilité parfaite ? Parce que les nouveaux Pods peuvent rencontrer des problèmes au démarrage ou ne pas fonctionner correctement. Il peut donc quand même y avoir une interruption du service.
+3. Dans quelles conditions `rollout undo` fonctionne-t-il ? Il faut qu'une ancienne version du Deployment soit encore disponible dans son historique. La commande permet alors de revenir à cette version précédente.
+4. Pourquoi faut-il versionner les configurations et planifier les migrations de base de données séparément ? Cela permet de retrouver une ancienne configuration en cas de problème. Pour les bases de données, un retour arrière de l'application ne restaure pas automatiquement l'ancienne structure de la base, ce qui peut provoquer des problèmes de compatibilité.
 
 ---
 
@@ -493,9 +523,9 @@ kubectl get events -n tp-k8s --sort-by=.metadata.creationTimestamp
 
 **Questions :**
 
-- Quel état observez-vous ?
-- Quel événement indique la cause probable ?
-- Comment corriger le manifeste et vérifier le retour à la normale ?
+- Quel état observez-vous ? Le Pod peut être en état `ErrImagePull` ou `ImagePullBackOff`, ce qui signifie que Kubernetes n'arrive pas à télécharger l'image.
+- Quel événement indique la cause probable ? L'événement `Failed to pull image` indique que Kubernetes n'a pas réussi à récupérer l'image demandée.
+- Comment corriger le manifeste et vérifier le retour à la normale ? Il faut corriger le nom de l'image dans le fichier YAML puis réappliquer le Deployment avec `kubectl apply`. On peut ensuite vérifier que les Pods sont bien en état `Running`.
 
 ### Incident B — Service inaccessible
 
@@ -510,9 +540,9 @@ kubectl get endpointslices -n tp-k8s
 
 **Questions :**
 
-- Pourquoi le Service n’a-t-il plus de destination exploitable ?
-- Pourquoi les Pods peuvent-ils être opérationnels alors que l’application est inaccessible via le Service ?
-- Quelle correction permet de rétablir le routage ?
+- Pourquoi le Service n’a-t-il plus de destination exploitable ? Parce que le sélecteur du Service ne correspond plus aux labels des Pods, il ne trouve donc plus de Pods vers lesquels envoyer les requêtes.
+- Pourquoi les Pods peuvent-ils être opérationnels alors que l’application est inaccessible via le Service ? Parce que les Pods fonctionnent toujours normalement, mais le Service ne sait plus vers lesquels rediriger les connexions.
+- Quelle correction permet de rétablir le routage ? Il faut remettre le bon sélecteur dans le Service pour qu'il corresponde aux labels des Pods, puis réappliquer le manifeste.
 
 ### Incident C — Sonde de santé incorrecte
 
@@ -526,9 +556,9 @@ kubectl get endpointslices -n tp-k8s
 
 **Questions :**
 
-- Quel est l’effet d’une readiness probe en échec ?
-- En quoi son effet diffère-t-il de celui d’une liveness probe en échec ?
-- Pourquoi une sonde mal configurée peut-elle provoquer une indisponibilité ?
+- Quel est l’effet d’une readiness probe en échec ? Le Pod est considéré comme non prêt et ne reçoit donc plus de trafic via le Service, même si son conteneur continue de fonctionner.
+- En quoi son effet diffère-t-il de celui d’une liveness probe en échec ? La readiness probe empêche simplement le Pod de recevoir du trafic, alors que la liveness probe peut provoquer le redémarrage du conteneur.
+- Pourquoi une sonde mal configurée peut-elle provoquer une indisponibilité ? Parce qu'elle peut considérer un Pod fonctionnel comme défaillant. Si tous les Pods sont concernés, aucun ne pourra recevoir de trafic et l'application deviendra inaccessible.
 
 **Consigne :** restaurez tous les manifestes à un état fonctionnel après les expériences.
 
@@ -554,13 +584,21 @@ Faites évoluer le déploiement afin de satisfaire les exigences suivantes :
 1. Le répertoire `k8s/` contenant les manifestes YAML.
 2. Une analyse des limites d’un cluster local par rapport à un cluster cloud de production.
 
+Un cluster local comme Minikube permet de tester Kubernetes facilement, mais il possède certaines limites. Il utilise généralement un seul nœud et dispose de ressources limitées. Il ne permet donc pas de tester correctement la tolérance aux pannes ou la répartition des applications sur plusieurs machines.
+
+Un cluster cloud de production possède généralement plusieurs nœuds, davantage de ressources et des mécanismes de haute disponibilité. Il offre aussi des possibilités supplémentaires pour gérer la sécurité, le stockage et le trafic réseau.
+
 ---
 
 ## 12. Conclusion attendue
 
 Répondez à la question suivante :
 
-> En quoi Kubernetes apporte-t-il des mécanismes d’orchestration qui dépassent la simple exécution de conteneurs avec Docker, et quelles précautions restent nécessaires pour exploiter une application de manière fiable en production ?
+ > En quoi Kubernetes apporte-t-il des mécanismes d’orchestration qui dépassent la simple exécution de conteneurs avec Docker, et quelles précautions restent nécessaires pour exploiter une application de manière fiable en production ?
+
+Docker permet de créer et d'exécuter des conteneurs, tandis que Kubernetes permet de les gérer automatiquement. Il permet notamment de remplacer les Pods en cas de problème, de gérer le nombre de réplicas, de faire des mises à jour et de répartir les connexions entre les différentes instances.
+
+Pour une utilisation en production, il faut quand même faire attention à la sécurité, aux ressources disponibles, aux sauvegardes et à la surveillance des applications. Il faut également prévoir plusieurs nœuds pour éviter qu'une seule panne rende toute l'application indisponible.
 
 
 ## 13. Nettoyage de l’environnement
